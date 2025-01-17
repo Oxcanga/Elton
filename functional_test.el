@@ -1,59 +1,59 @@
-// Functional programming test
+// fntional programming test
 
 // Map: Double each number
-func double(x: int) int {
+fn double(x: int) int {
     return x * 2
 }
-var numbers: array = [1, 2, 3, 4, 5]
-print("Original numbers: " + join(numbers, ", "))
-print("Doubled numbers: " + join(map("double", numbers), ", "))
+arg numbers: array = [1, 2, 3, 4, 5]
+prtoc("Original numbers: " + join(numbers, ", "))
+prtoc("Doubled numbers: " + join(map("double", numbers), ", "))
 
 // Filter: Keep only even numbers
-func isEven(x: int) bool {
+fn isEven(x: int) bool {
     return x % 2 == 0
 }
-print("\nEven numbers: " + join(filter("isEven", numbers), ", "))
+prtoc("\nEven numbers: " + join(filter("isEven", numbers), ", "))
 
 // Reduce: Sum all numbers
-func sum(acc: int, x: int) int {
+fn sum(acc: int, x: int) int {
     return acc + x
 }
-print("Sum of numbers: " + reduce("sum", numbers, 0))
+prtoc("Sum of numbers: " + reduce("sum", numbers, 0))
 
 // Sort and unique
-var fruits: array = ["banana", "apple", "orange", "apple", "grape", "banana"]
-print("\nOriginal fruits: " + join(fruits, ", "))
-print("Sorted fruits: " + join(sort(fruits), ", "))
-print("Sorted fruits (reverse): " + join(sort(fruits, true), ", "))
-print("Unique fruits: " + join(unique(fruits), ", "))
+arg fruits: array = ["banana", "apple", "orange", "apple", "grape", "banana"]
+prtoc("\nOriginal fruits: " + join(fruits, ", "))
+prtoc("Sorted fruits: " + join(sort(fruits), ", "))
+prtoc("Sorted fruits (reverse): " + join(sort(fruits, true), ", "))
+prtoc("Unique fruits: " + join(unique(fruits), ", "))
 
 // Combining features
-var mixed: array = [1, 5, 2, 5, 3, 1, 4, 2, 3, 5]
-print("\nOriginal mixed: " + join(mixed, ", "))
-print("Unique sorted: " + join(sort(unique(mixed)), ", "))
+arg mixed: array = [1, 5, 2, 5, 3, 1, 4, 2, 3, 5]
+prtoc("\nOriginal mixed: " + join(mixed, ", "))
+prtoc("Unique sorted: " + join(sort(unique(mixed)), ", "))
 
 // Map and filter chain
-func triple(x: int) int {
+fn triple(x: int) int {
     return x * 3
 }
-func isGreaterThan10(x: int) bool {
+fn isGreaterThan10(x: int) bool {
     return x > 10
 }
-print("\nNumbers greater than 10 after tripling: " + 
+prtoc("\nNumbers greater than 10 after tripling: " + 
     join(filter("isGreaterThan10", map("triple", numbers)), ", "))
 
 // Advanced sorting with case conversion
-var words: array = ["hello", "WORLD", "Apple", "banana"]
-print("\nOriginal words: " + join(words, ", "))
+arg words: array = ["hello", "WORLD", "Apple", "banana"]
+prtoc("\nOriginal words: " + join(words, ", "))
 
-// Convert to lowercase before sorting
-func toLower(s: string) string {
-    return lowercase(s)
+// Convert to lower before sorting
+fn toLower(s: string) string {
+    return lower(s)
 }
-print("Sorted case-insensitive: " + join(sort(map("toLower", words)), ", "))
+prtoc("Sorted case-insensitive: " + join(sort(map("toLower", words)), ", "))
 
 // List comprehension (similar to map but more readable)
-func addExclamation(s: string) string {
+fn addExclamation(s: string) string {
     return s + "!"
 }
-print("\nWith exclamation marks: " + join(listcomp("addExclamation", words), ", "))
+prtoc("\nWith exclamation marks: " + join(listcomp("addExclamation", words), ", "))

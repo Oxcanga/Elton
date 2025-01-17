@@ -1,0 +1,5 @@
+func -> fn
+var -> arg
+print -> prtoc
+lowercase -> lower
+uppercase -> upper

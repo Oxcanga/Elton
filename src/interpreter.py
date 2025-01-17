@@ -12,16 +12,17 @@ class Interpreter:
         return result
         
     def evaluate_node(self, node):
-        if not isinstance(node, dict):
-            return node
+        if node is None:
+            return None
             
         node_type = node.get('type')
         
         if node_type == 'number':
-            return node['value']
+            return float(node['value'])
             
         elif node_type == 'string':
-            return str(node['value'])  # Ensure string type for concatenation
+            # Remove quotes from string literal
+            return node['value'][1:-1]
             
         elif node_type == 'boolean':
             return node['value']
@@ -36,35 +37,19 @@ class Interpreter:
                 return None
                 
         elif node_type == 'variable':
-            if node['name'] not in self.variables:
-                raise NameError(f"Variable '{node['name']}' is not defined")
-            return self.variables[node['name']]
+            name = node['name']
+            if name not in self.variables:
+                raise NameError(f"Variable '{name}' is not defined")
+            return self.variables[name]
             
         elif node_type == 'binary_op':
             left = self.evaluate_node(node['left'])
-            
-            # Short-circuit evaluation for logical operators
-            if node['operator'] == '&&':
-                return left and self.evaluate_node(node['right'])
-            elif node['operator'] == '||':
-                return left or self.evaluate_node(node['right'])
-            
             right = self.evaluate_node(node['right'])
             
-            # Handle string concatenation
-            if node['operator'] == '+' and (isinstance(left, str) or isinstance(right, str)):
-                # Convert numbers to strings with proper formatting
-                if isinstance(left, (int, float)):
-                    left = str(int(left) if left.is_integer() else left)
-                if isinstance(right, (int, float)):
-                    right = str(int(right) if right.is_integer() else right)
-                return str(left) + str(right)
-            
-            # Handle numeric operations
-            if node['operator'] in ['+', '-', '*', '/', '%'] and (not isinstance(left, (int, float)) or not isinstance(right, (int, float))):
-                raise TypeError(f"Cannot perform {node['operator']} operation on {type(left)} and {type(right)}")
-                
             if node['operator'] == '+':
+                # Handle string concatenation
+                if isinstance(left, str) or isinstance(right, str):
+                    return str(left) + str(right)
                 return left + right
             elif node['operator'] == '-':
                 return left - right
@@ -75,17 +60,15 @@ class Interpreter:
                     raise ZeroDivisionError("Division by zero")
                 return left / right
             elif node['operator'] == '%':
-                if right == 0:
-                    raise ZeroDivisionError("Modulo by zero")
                 return left % right
-            elif node['operator'] == '<':
-                return left < right
-            elif node['operator'] == '>':
-                return left > right
             elif node['operator'] == '==':
                 return left == right
             elif node['operator'] == '!=':
                 return left != right
+            elif node['operator'] == '<':
+                return left < right
+            elif node['operator'] == '>':
+                return left > right
             elif node['operator'] == '<=':
                 return left <= right
             elif node['operator'] == '>=':
@@ -107,13 +90,80 @@ class Interpreter:
                 raise TypeError("Array index must be an integer")
             index = int(index)
             
+            # Support negative indices
+            if index < 0:
+                index = len(array) + index
+                
             if index < 0 or index >= len(array):
                 raise IndexError(f"Array index {index} out of bounds")
             return array[index]
             
+        elif node_type == 'array_slice':
+            array = self.evaluate_node({'type': 'variable', 'name': node['array']})
+            if array is None:
+                raise NameError(f"Variable '{node['array']}' is not defined")
+            if not isinstance(array, list):
+                raise TypeError(f"Variable '{node['array']}' is not an array")
+                
+            start = self.evaluate_node(node['start'])
+            if start is not None:
+                if not isinstance(start, (int, float)) or not float(start).is_integer():
+                    raise TypeError("Slice start must be an integer")
+                start = int(start)
+                if start < 0:
+                    start = len(array) + start
+                    
+            end = self.evaluate_node(node['end'])
+            if end is not None:
+                if not isinstance(end, (int, float)) or not float(end).is_integer():
+                    raise TypeError("Slice end must be an integer")
+                end = int(end)
+                if end < 0:
+                    end = len(array) + end
+                    
+            return array[start:end]
+            
+        elif node_type == 'lambda':
+            # Store lambda in functions dictionary with a unique name
+            lambda_name = f"_lambda_{len(self.functions)}"
+            self.functions[lambda_name] = node
+            return lambda_name
+            
+        elif node_type == 'try_catch':
+            try:
+                result = None
+                for statement in node['try_body']:
+                    result = self.evaluate_node(statement)
+            except Exception as e:
+                # Store error in catch variable
+                old_value = self.variables.get(node['catch_var'])
+                self.variables[node['catch_var']] = str(e)
+                
+                # Execute catch block
+                result = None
+                for statement in node['catch_body']:
+                    result = self.evaluate_node(statement)
+                    
+                # Restore old value if it existed
+                if old_value is not None:
+                    self.variables[node['catch_var']] = old_value
+                else:
+                    del self.variables[node['catch_var']]
+                    
+            return result
+            
+        elif node_type == 'throw':
+            error_msg = self.evaluate_node(node['value'])
+            raise Exception(str(error_msg))
+            
         elif node_type == 'var_declaration':
             name = node['name']
             value = self.evaluate_node(node['value'])
+            if isinstance(value, str) and value.startswith('_lambda_'):
+                # Store lambda function with variable name
+                self.functions[name] = self.functions[value]
+                del self.functions[value]  # Remove temporary lambda name
+                value = name
             self.variables[name] = value
             return value
             
@@ -129,18 +179,43 @@ class Interpreter:
             return None
             
         elif node_type == 'function_call':
-            if node['name'] == 'print':
+            func_name = node['name']
+            if func_name in self.functions:
+                # Handle user-defined functions and lambdas
+                func = self.functions[func_name]
+                if len(node['arguments']) != len(func['params']):
+                    raise TypeError(f"Function '{func_name}' expects {len(func['params'])} arguments")
+                
+                # Create new scope
+                old_variables = self.variables.copy()
+                
+                # Bind arguments to parameters
+                for param, arg in zip(func['params'], node['arguments']):
+                    self.variables[param['name']] = self.evaluate_node(arg)
+                
+                # Execute function body
+                result = None
+                for statement in func['body']:
+                    result = self.evaluate_node(statement)
+                    if isinstance(result, dict) and result.get('type') == 'return':
+                        result = self.evaluate_node(result['value'])
+                        break
+                
+                # Restore old scope
+                self.variables = old_variables
+                return result
+            elif func_name == 'print':
                 args = [self.evaluate_node(arg) for arg in node['arguments']]
                 print(*args)
                 return None
-            elif node['name'] == 'abs':
+            elif func_name == 'abs':
                 if len(node['arguments']) != 1:
                     raise TypeError("abs() expects 1 argument: number")
                 num = self.evaluate_node(node['arguments'][0])
                 if not isinstance(num, (int, float)):
                     raise TypeError("Argument to abs() must be a number")
                 return abs(num)
-            elif node['name'] == 'max':
+            elif func_name == 'max':
                 if len(node['arguments']) < 1:
                     raise TypeError("max() expects at least 1 argument")
                 args = [self.evaluate_node(arg) for arg in node['arguments']]
@@ -149,7 +224,7 @@ class Interpreter:
                 if not all(isinstance(x, (int, float)) for x in args):
                     raise TypeError("All arguments to max() must be numbers")
                 return max(args)
-            elif node['name'] == 'min':
+            elif func_name == 'min':
                 if len(node['arguments']) < 1:
                     raise TypeError("min() expects at least 1 argument")
                 args = [self.evaluate_node(arg) for arg in node['arguments']]
@@ -158,7 +233,7 @@ class Interpreter:
                 if not all(isinstance(x, (int, float)) for x in args):
                     raise TypeError("All arguments to min() must be numbers")
                 return min(args)
-            elif node['name'] == 'round':
+            elif func_name == 'round':
                 if len(node['arguments']) not in [1, 2]:
                     raise TypeError("round() expects 1 or 2 arguments: number, [decimals]")
                 num = self.evaluate_node(node['arguments'][0])
@@ -168,7 +243,7 @@ class Interpreter:
                     decimals = int(self.evaluate_node(node['arguments'][1]))
                     return round(num, decimals)
                 return float(round(num))
-            elif node['name'] == 'push':
+            elif func_name == 'push':
                 if len(node['arguments']) != 2:
                     raise TypeError("push() expects 2 arguments: array and value")
                 array = self.evaluate_node(node['arguments'][0])
@@ -177,7 +252,7 @@ class Interpreter:
                     raise TypeError("First argument to push() must be an array")
                 array.append(value)
                 return len(array)
-            elif node['name'] == 'pop':
+            elif func_name == 'pop':
                 if len(node['arguments']) != 1:
                     raise TypeError("pop() expects 1 argument: array")
                 array = self.evaluate_node(node['arguments'][0])
@@ -186,7 +261,7 @@ class Interpreter:
                 if not array:
                     raise IndexError("Cannot pop from empty array")
                 return array.pop()
-            elif node['name'] == 'length':
+            elif func_name == 'length':
                 if len(node['arguments']) != 1:
                     raise TypeError("length() expects 1 argument")
                 arg = self.evaluate_node(node['arguments'][0])
@@ -196,7 +271,7 @@ class Interpreter:
                     return float(len(arg))
                 else:
                     raise TypeError("length() argument must be array or string")
-            elif node['name'] == 'slice':
+            elif func_name == 'slice':
                 if len(node['arguments']) not in [2, 3]:
                     raise TypeError("slice() expects 2 or 3 arguments: array, start, [end]")
                 array = self.evaluate_node(node['arguments'][0])
@@ -207,7 +282,7 @@ class Interpreter:
                     end = int(self.evaluate_node(node['arguments'][2]))
                     return array[start:end]
                 return array[start:]
-            elif node['name'] == 'join':
+            elif func_name == 'join':
                 if len(node['arguments']) not in [1, 2]:
                     raise TypeError("join() expects 1 or 2 arguments: array, [separator]")
                 array = self.evaluate_node(node['arguments'][0])
@@ -217,14 +292,14 @@ class Interpreter:
                     separator = str(self.evaluate_node(node['arguments'][1]))
                     return separator.join(str(x) for x in array)
                 return ''.join(str(x) for x in array)
-            elif node['name'] == 'reverse':
+            elif func_name == 'reverse':
                 if len(node['arguments']) != 1:
                     raise TypeError("reverse() expects 1 argument: array")
                 array = self.evaluate_node(node['arguments'][0])
                 if not isinstance(array, list):
                     raise TypeError("Argument to reverse() must be an array")
                 return array[::-1]
-            elif node['name'] == 'substring':
+            elif func_name == 'substring':
                 if len(node['arguments']) not in [2, 3]:
                     raise TypeError("substring() expects 2 or 3 arguments: string, start, [end]")
                 string = str(self.evaluate_node(node['arguments'][0]))
@@ -233,19 +308,19 @@ class Interpreter:
                     end = int(self.evaluate_node(node['arguments'][2]))
                     return string[start:end]
                 return string[start:]
-            elif node['name'] == 'uppercase':
+            elif func_name == 'uppercase':
                 if len(node['arguments']) != 1:
                     raise TypeError("uppercase() expects 1 argument: string")
                 return str(self.evaluate_node(node['arguments'][0])).upper()
-            elif node['name'] == 'lowercase':
+            elif func_name == 'lowercase':
                 if len(node['arguments']) != 1:
                     raise TypeError("lowercase() expects 1 argument: string")
                 return str(self.evaluate_node(node['arguments'][0])).lower()
-            elif node['name'] == 'trim':
+            elif func_name == 'trim':
                 if len(node['arguments']) != 1:
                     raise TypeError("trim() expects 1 argument: string")
                 return str(self.evaluate_node(node['arguments'][0])).strip()
-            elif node['name'] == 'split':
+            elif func_name == 'split':
                 if len(node['arguments']) not in [1, 2]:
                     raise TypeError("split() expects 1 or 2 arguments: string, [delimiter]")
                 string = str(self.evaluate_node(node['arguments'][0]))
@@ -253,7 +328,7 @@ class Interpreter:
                     delimiter = str(self.evaluate_node(node['arguments'][1]))
                     return string.split(delimiter)
                 return string.split()
-            elif node['name'] == 'map':
+            elif func_name == 'map':
                 if len(node['arguments']) != 2:
                     raise TypeError("map() expects 2 arguments: function and array")
                 func_name = node['arguments'][0]['value']
@@ -279,7 +354,7 @@ class Interpreter:
                     self.variables = old_variables
                 return result
                 
-            elif node['name'] == 'filter':
+            elif func_name == 'filter':
                 if len(node['arguments']) != 2:
                     raise TypeError("filter() expects 2 arguments: function and array")
                 func_name = node['arguments'][0]['value']
@@ -306,7 +381,7 @@ class Interpreter:
                     self.variables = old_variables
                 return result
                 
-            elif node['name'] == 'reduce':
+            elif func_name == 'reduce':
                 if len(node['arguments']) != 3:
                     raise TypeError("reduce() expects 3 arguments: function, array, and initial value")
                 func_name = node['arguments'][0]['value']
@@ -334,7 +409,7 @@ class Interpreter:
                     self.variables = old_variables
                 return accumulator
                 
-            elif node['name'] == 'sort':
+            elif func_name == 'sort':
                 if len(node['arguments']) not in [1, 2]:
                     raise TypeError("sort() expects 1 or 2 arguments: array, [reverse]")
                 array = self.evaluate_node(node['arguments'][0])
@@ -351,7 +426,7 @@ class Interpreter:
                 except TypeError:
                     raise TypeError("Array elements must be comparable")
                     
-            elif node['name'] == 'unique':
+            elif func_name == 'unique':
                 if len(node['arguments']) != 1:
                     raise TypeError("unique() expects 1 argument: array")
                 array = self.evaluate_node(node['arguments'][0])
@@ -367,7 +442,7 @@ class Interpreter:
                         result.append(item)
                 return result
                 
-            elif node['name'] == 'listcomp':
+            elif func_name == 'listcomp':
                 if len(node['arguments']) != 2:
                     raise TypeError("listcomp() expects 2 arguments: function and array")
                 func_name = node['arguments'][0]['value']
@@ -393,12 +468,12 @@ class Interpreter:
                     self.variables = old_variables
                 return result
                 
-            if node['name'] not in self.functions:
-                raise NameError(f"Function '{node['name']}' is not defined")
+            if func_name not in self.functions:
+                raise NameError(f"Function '{func_name}' is not defined")
                 
-            func = self.functions[node['name']]
+            func = self.functions[func_name]
             if len(node['arguments']) != len(func['params']):
-                raise TypeError(f"Function '{node['name']}' expects {len(func['params'])} arguments")
+                raise TypeError(f"Function '{func_name}' expects {len(func['params'])} arguments")
                 
             # Create new scope for function
             old_variables = self.variables.copy()

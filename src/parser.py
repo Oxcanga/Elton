@@ -19,6 +19,8 @@ class Parser:
                 return self.parse_variable_declaration()
             elif token.value == 'func':
                 return self.parse_function_declaration()
+            elif token.value == 'lambda':
+                return self.parse_lambda_declaration()
             elif token.value == 'return':
                 return self.parse_return_statement()
             elif token.value == 'print':
@@ -29,6 +31,10 @@ class Parser:
                 return self.parse_while_statement()
             elif token.value == 'for':
                 return self.parse_for_statement()
+            elif token.value == 'try':
+                return self.parse_try_catch()
+            elif token.value == 'throw':
+                return self.parse_throw()
         elif token.type == 'IDENTIFIER':
             # Handle assignment to existing variable
             if self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1].type == 'ASSIGN':
@@ -124,6 +130,17 @@ class Parser:
                 elif next_token.type == 'LBRACKET':
                     self.consume('LBRACKET')
                     index = self.parse_expression()
+                    
+                    # Check for slice operator
+                    if self.current_token().type == 'COLON':
+                        self.consume('COLON')
+                        if self.current_token().type == 'RBRACKET':
+                            end = None
+                        else:
+                            end = self.parse_expression()
+                        self.consume('RBRACKET')
+                        return {'type': 'array_slice', 'array': token.value, 'start': index, 'end': end}
+                    
                     self.consume('RBRACKET')
                     return {'type': 'array_access', 'array': token.value, 'index': index}
             return {'type': 'variable', 'name': token.value}
@@ -141,18 +158,18 @@ class Parser:
         self.consume('KEYWORD')  # consume 'var'
         name = self.consume('IDENTIFIER').value
         self.consume('COLON')
-        type_token = self.consume('KEYWORD')  # Changed from IDENTIFIER to KEYWORD for type names
+        type_token = self.consume('KEYWORD').value
         self.consume('ASSIGN')
         
-        # Handle array literals
-        if self.current_token().type == 'LBRACKET':
-            value = self.parse_array_literal()
+        # Handle lambda functions
+        if self.current_token().type == 'KEYWORD' and self.current_token().value == 'lambda':
+            value = self.parse_lambda_declaration()
         else:
             value = self.parse_expression()
             
         if self.pos < len(self.tokens) and self.current_token().type == 'SEMICOLON':
             self.consume('SEMICOLON')
-        return {'type': 'var_declaration', 'name': name, 'var_type': type_token.value, 'value': value}
+        return {'type': 'var_declaration', 'name': name, 'var_type': type_token, 'value': value}
 
     def parse_function_declaration(self):
         self.consume('KEYWORD')  # consume 'func'
@@ -165,11 +182,11 @@ class Parser:
                 self.consume('COMMA')
             param_name = self.consume('IDENTIFIER').value
             self.consume('COLON')
-            param_type = self.consume('KEYWORD').value  # Changed from IDENTIFIER to KEYWORD
+            param_type = self.consume('KEYWORD').value
             params.append({'name': param_name, 'type': param_type})
             
         self.consume('RPAREN')
-        return_type = self.consume('KEYWORD').value  # Changed from IDENTIFIER to KEYWORD
+        return_type = self.consume('KEYWORD').value
         
         self.consume('LBRACE')
         body = []
@@ -305,11 +322,60 @@ class Parser:
         self.consume('RBRACKET')
         return {'type': 'array', 'elements': elements}
 
-    def parse_array_access(self, array_name):
-        self.consume('LBRACKET')
-        index = self.parse_expression()
-        self.consume('RBRACKET')
-        return {'type': 'array_access', 'array': array_name, 'index': index}
+    def parse_lambda_declaration(self):
+        self.consume('KEYWORD')  # consume 'lambda'
+        self.consume('LPAREN')
+        params = []
+        if self.current_token().type != 'RPAREN':
+            name = self.consume('IDENTIFIER').value
+            self.consume('COLON')
+            type_token = self.consume('KEYWORD').value
+            params.append({'name': name, 'type': type_token})
+            while self.current_token().type == 'COMMA':
+                self.consume('COMMA')
+                name = self.consume('IDENTIFIER').value
+                self.consume('COLON')
+                type_token = self.consume('KEYWORD').value
+                params.append({'name': name, 'type': type_token})
+        self.consume('RPAREN')
+        self.consume('LBRACE')
+        body = []
+        while self.current_token().type != 'RBRACE':
+            body.append(self.parse_statement())
+        self.consume('RBRACE')
+        return {'type': 'lambda', 'params': params, 'body': body}
+
+    def parse_try_catch(self):
+        self.consume('KEYWORD')  # consume 'try'
+        self.consume('LBRACE')
+        try_body = []
+        while self.current_token().type != 'RBRACE':
+            try_body.append(self.parse_statement())
+        self.consume('RBRACE')
+        
+        self.consume('KEYWORD')  # consume 'catch'
+        error_var = self.consume('IDENTIFIER').value
+        
+        self.consume('LBRACE')
+        catch_body = []
+        while self.current_token().type != 'RBRACE':
+            catch_body.append(self.parse_statement())
+        self.consume('RBRACE')
+        
+        return {'type': 'try_catch', 'try_body': try_body, 'catch_var': error_var, 'catch_body': catch_body}
+
+    def parse_throw(self):
+        self.consume('KEYWORD')  # consume 'throw'
+        value = self.parse_expression()
+        if self.current_token().type == 'SEMICOLON':
+            self.consume('SEMICOLON')
+        return {'type': 'throw', 'value': value}
+
+    def parse_parameter(self):
+        name = self.consume('IDENTIFIER').value
+        self.consume('COLON')
+        type_token = self.consume('KEYWORD').value
+        return {'name': name, 'type': type_token}
 
     def parse_conditional_expression(self):
         self.consume('KEYWORD')  # consume 'if'

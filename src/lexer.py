@@ -17,10 +17,9 @@ class Lexer:
             if char.isspace():
                 if char == '\n':
                     self.line += 1
-                    self.column = 1
-                else:
-                    self.column += 1
+                    self.column = 0
                 self.pos += 1
+                self.column += 1
                 continue
                 
             # Handle comments
@@ -29,7 +28,7 @@ class Lexer:
                     self.pos += 1
                 continue
                 
-            # Handle strings
+            # Handle string interpolation and regular strings
             if char == '"':
                 string = ''
                 start_col = self.column
@@ -43,6 +42,41 @@ class Lexer:
                         if self.pos >= len(self.source):
                             raise SyntaxError(f"Unterminated string at line {self.line}, column {start_col}")
                         string += {'n': '\n', 't': '\t', '"': '"', '\\': '\\'}.get(self.source[self.pos], self.source[self.pos])
+                    elif self.source[self.pos] == '$' and self.pos + 1 < len(self.source) and self.source[self.pos + 1] == '{':
+                        # Handle string interpolation
+                        if string:
+                            self.tokens.append(Token('STRING', '"' + string + '"', self.line, start_col))
+                            self.tokens.append(Token('PLUS', '+', self.line, self.column))
+                            string = ''
+                            
+                        self.pos += 2  # Skip ${
+                        self.column += 2
+                        
+                        # Parse the expression inside ${}
+                        expr_start = self.pos
+                        brace_count = 1
+                        while self.pos < len(self.source) and brace_count > 0:
+                            if self.source[self.pos] == '{':
+                                brace_count += 1
+                            elif self.source[self.pos] == '}':
+                                brace_count -= 1
+                            self.pos += 1
+                            self.column += 1
+                            
+                        if brace_count > 0:
+                            raise SyntaxError(f"Unterminated string interpolation at line {self.line}, column {start_col}")
+                            
+                        # Create a new lexer for the interpolated expression
+                        expr_lexer = Lexer(self.source[expr_start:self.pos-1])
+                        expr_tokens = expr_lexer.tokenize()
+                        
+                        # Add string conversion
+                        self.tokens.append(Token('LPAREN', '(', self.line, self.column))
+                        self.tokens.extend(expr_tokens)
+                        self.tokens.append(Token('RPAREN', ')', self.line, self.column))
+                        
+                        self.tokens.append(Token('PLUS', '+', self.line, self.column))
+                        continue
                     else:
                         string += self.source[self.pos]
                     self.pos += 1
@@ -53,7 +87,8 @@ class Lexer:
                     
                 self.pos += 1  # Skip closing quote
                 self.column += 1
-                self.tokens.append(Token('STRING', '"' + string + '"', self.line, start_col))  
+                if string:
+                    self.tokens.append(Token('STRING', '"' + string + '"', self.line, start_col))
                 continue
                 
             # Multi-character operators
@@ -104,8 +139,9 @@ class Lexer:
                     self.column += 1
                     
                 # Check if it's a keyword
-                keywords = {'var', 'func', 'if', 'else', 'while', 'return', 'print', 'true', 'false', 'and', 'or', 'not',
-                          'string', 'int', 'bool', 'float', 'array', 'for', 'in'}
+                keywords = {'var', 'func', 'if', 'else', 'while', 'return', 'print', 'true', 'false', 
+                          'and', 'or', 'not', 'string', 'int', 'bool', 'float', 'array', 'for', 'in',
+                          'try', 'catch', 'throw', 'lambda'}
                 token_type = 'KEYWORD' if ident in keywords else 'IDENTIFIER'
                 self.tokens.append(Token(token_type, ident, self.line, start_col))
                 continue

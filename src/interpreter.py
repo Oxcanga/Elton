@@ -133,7 +133,126 @@ class Interpreter:
                 args = [self.evaluate_node(arg) for arg in node['arguments']]
                 print(*args)
                 return None
-                
+            elif node['name'] == 'abs':
+                if len(node['arguments']) != 1:
+                    raise TypeError("abs() expects 1 argument: number")
+                num = self.evaluate_node(node['arguments'][0])
+                if not isinstance(num, (int, float)):
+                    raise TypeError("Argument to abs() must be a number")
+                return abs(num)
+            elif node['name'] == 'max':
+                if len(node['arguments']) < 1:
+                    raise TypeError("max() expects at least 1 argument")
+                args = [self.evaluate_node(arg) for arg in node['arguments']]
+                if len(args) == 1 and isinstance(args[0], list):
+                    args = args[0]
+                if not all(isinstance(x, (int, float)) for x in args):
+                    raise TypeError("All arguments to max() must be numbers")
+                return max(args)
+            elif node['name'] == 'min':
+                if len(node['arguments']) < 1:
+                    raise TypeError("min() expects at least 1 argument")
+                args = [self.evaluate_node(arg) for arg in node['arguments']]
+                if len(args) == 1 and isinstance(args[0], list):
+                    args = args[0]
+                if not all(isinstance(x, (int, float)) for x in args):
+                    raise TypeError("All arguments to min() must be numbers")
+                return min(args)
+            elif node['name'] == 'round':
+                if len(node['arguments']) not in [1, 2]:
+                    raise TypeError("round() expects 1 or 2 arguments: number, [decimals]")
+                num = self.evaluate_node(node['arguments'][0])
+                if not isinstance(num, (int, float)):
+                    raise TypeError("First argument to round() must be a number")
+                if len(node['arguments']) == 2:
+                    decimals = int(self.evaluate_node(node['arguments'][1]))
+                    return round(num, decimals)
+                return float(round(num))
+            elif node['name'] == 'push':
+                if len(node['arguments']) != 2:
+                    raise TypeError("push() expects 2 arguments: array and value")
+                array = self.evaluate_node(node['arguments'][0])
+                value = self.evaluate_node(node['arguments'][1])
+                if not isinstance(array, list):
+                    raise TypeError("First argument to push() must be an array")
+                array.append(value)
+                return len(array)
+            elif node['name'] == 'pop':
+                if len(node['arguments']) != 1:
+                    raise TypeError("pop() expects 1 argument: array")
+                array = self.evaluate_node(node['arguments'][0])
+                if not isinstance(array, list):
+                    raise TypeError("Argument to pop() must be an array")
+                if not array:
+                    raise IndexError("Cannot pop from empty array")
+                return array.pop()
+            elif node['name'] == 'length':
+                if len(node['arguments']) != 1:
+                    raise TypeError("length() expects 1 argument")
+                arg = self.evaluate_node(node['arguments'][0])
+                if isinstance(arg, list):
+                    return float(len(arg))  # Convert to float to match our number type
+                elif isinstance(arg, str):
+                    return float(len(arg))
+                else:
+                    raise TypeError("length() argument must be array or string")
+            elif node['name'] == 'slice':
+                if len(node['arguments']) not in [2, 3]:
+                    raise TypeError("slice() expects 2 or 3 arguments: array, start, [end]")
+                array = self.evaluate_node(node['arguments'][0])
+                start = int(self.evaluate_node(node['arguments'][1]))
+                if not isinstance(array, list):
+                    raise TypeError("First argument to slice() must be an array")
+                if len(node['arguments']) == 3:
+                    end = int(self.evaluate_node(node['arguments'][2]))
+                    return array[start:end]
+                return array[start:]
+            elif node['name'] == 'join':
+                if len(node['arguments']) not in [1, 2]:
+                    raise TypeError("join() expects 1 or 2 arguments: array, [separator]")
+                array = self.evaluate_node(node['arguments'][0])
+                if not isinstance(array, list):
+                    raise TypeError("First argument to join() must be an array")
+                if len(node['arguments']) == 2:
+                    separator = str(self.evaluate_node(node['arguments'][1]))
+                    return separator.join(str(x) for x in array)
+                return ''.join(str(x) for x in array)
+            elif node['name'] == 'reverse':
+                if len(node['arguments']) != 1:
+                    raise TypeError("reverse() expects 1 argument: array")
+                array = self.evaluate_node(node['arguments'][0])
+                if not isinstance(array, list):
+                    raise TypeError("Argument to reverse() must be an array")
+                return array[::-1]
+            elif node['name'] == 'substring':
+                if len(node['arguments']) not in [2, 3]:
+                    raise TypeError("substring() expects 2 or 3 arguments: string, start, [end]")
+                string = str(self.evaluate_node(node['arguments'][0]))
+                start = int(self.evaluate_node(node['arguments'][1]))
+                if len(node['arguments']) == 3:
+                    end = int(self.evaluate_node(node['arguments'][2]))
+                    return string[start:end]
+                return string[start:]
+            elif node['name'] == 'uppercase':
+                if len(node['arguments']) != 1:
+                    raise TypeError("uppercase() expects 1 argument: string")
+                return str(self.evaluate_node(node['arguments'][0])).upper()
+            elif node['name'] == 'lowercase':
+                if len(node['arguments']) != 1:
+                    raise TypeError("lowercase() expects 1 argument: string")
+                return str(self.evaluate_node(node['arguments'][0])).lower()
+            elif node['name'] == 'trim':
+                if len(node['arguments']) != 1:
+                    raise TypeError("trim() expects 1 argument: string")
+                return str(self.evaluate_node(node['arguments'][0])).strip()
+            elif node['name'] == 'split':
+                if len(node['arguments']) not in [1, 2]:
+                    raise TypeError("split() expects 1 or 2 arguments: string, [delimiter]")
+                string = str(self.evaluate_node(node['arguments'][0]))
+                if len(node['arguments']) == 2:
+                    delimiter = str(self.evaluate_node(node['arguments'][1]))
+                    return string.split(delimiter)
+                return string.split()
             if node['name'] not in self.functions:
                 raise NameError(f"Function '{node['name']}' is not defined")
                 

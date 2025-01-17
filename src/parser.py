@@ -36,8 +36,15 @@ class Parser:
                 self.pos += 1  # Skip identifier
                 self.consume('ASSIGN')
                 value = self.parse_expression()
-                self.consume('SEMICOLON')
+                if self.pos < len(self.tokens) and self.current_token().type == 'SEMICOLON':
+                    self.consume('SEMICOLON')
                 return {'type': 'assignment', 'name': name, 'value': value}
+            # Handle function calls as statements
+            elif self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1].type == 'LPAREN':
+                expr = self.parse_function_call()
+                if self.pos < len(self.tokens) and self.current_token().type == 'SEMICOLON':
+                    self.consume('SEMICOLON')
+                return expr
         return self.parse_expression()
 
     def parse_expression(self):
@@ -143,7 +150,8 @@ class Parser:
         else:
             value = self.parse_expression()
             
-        self.consume('SEMICOLON')
+        if self.pos < len(self.tokens) and self.current_token().type == 'SEMICOLON':
+            self.consume('SEMICOLON')
         return {'type': 'var_declaration', 'name': name, 'var_type': type_token.value, 'value': value}
 
     def parse_function_declaration(self):
@@ -188,7 +196,8 @@ class Parser:
     def parse_return_statement(self):
         self.consume('KEYWORD')  # consume 'return'
         value = self.parse_expression()
-        self.consume('SEMICOLON')
+        if self.pos < len(self.tokens) and self.current_token().type == 'SEMICOLON':
+            self.consume('SEMICOLON')
         return {'type': 'return', 'value': value}
 
     def parse_print_statement(self):
@@ -202,7 +211,8 @@ class Parser:
             args.append(self.parse_expression())
             
         self.consume('RPAREN')
-        self.consume('SEMICOLON')
+        if self.pos < len(self.tokens) and self.current_token().type == 'SEMICOLON':
+            self.consume('SEMICOLON')
         return {'type': 'print', 'arguments': args}
 
     def parse_if_statement(self):

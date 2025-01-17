@@ -76,9 +76,14 @@ class Lexer:
                     continue
                     
             # Numbers
-            if char.isdigit():
+            if char.isdigit() or (char == '-' and self.pos + 1 < len(self.source) and self.source[self.pos + 1].isdigit()):
                 num = ''
                 start_col = self.column
+                if char == '-':
+                    num += char
+                    self.pos += 1
+                    self.column += 1
+                    char = self.source[self.pos]
                 while self.pos < len(self.source) and (self.source[self.pos].isdigit() or self.source[self.pos] == '.'):
                     # Check for range operator
                     if self.pos + 1 < len(self.source) and self.source[self.pos:self.pos + 2] == '..':

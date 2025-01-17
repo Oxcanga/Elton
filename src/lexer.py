@@ -56,11 +56,33 @@ class Lexer:
                 self.tokens.append(Token('STRING', '"' + string + '"', self.line, start_col))  
                 continue
                 
+            # Multi-character operators
+            two_char_ops = {
+                '==': 'EQUALS',
+                '!=': 'NOT_EQUALS',
+                '<=': 'LESS_EQUAL',
+                '>=': 'GREATER_EQUAL',
+                '&&': 'AND',
+                '||': 'OR',
+                '..': 'RANGE'  # Added range operator for array slicing
+            }
+            
+            if self.pos + 1 < len(self.source):
+                two_chars = self.source[self.pos:self.pos + 2]
+                if two_chars in two_char_ops:
+                    self.tokens.append(Token(two_char_ops[two_chars], two_chars, self.line, self.column))
+                    self.pos += 2
+                    self.column += 2
+                    continue
+                    
             # Numbers
             if char.isdigit():
                 num = ''
                 start_col = self.column
                 while self.pos < len(self.source) and (self.source[self.pos].isdigit() or self.source[self.pos] == '.'):
+                    # Check for range operator
+                    if self.pos + 1 < len(self.source) and self.source[self.pos:self.pos + 2] == '..':
+                        break
                     num += self.source[self.pos]
                     self.pos += 1
                     self.column += 1
@@ -78,29 +100,11 @@ class Lexer:
                     
                 # Check if it's a keyword
                 keywords = {'var', 'func', 'if', 'else', 'while', 'return', 'print', 'true', 'false', 'and', 'or', 'not',
-                          'string', 'int', 'bool', 'float'}
+                          'string', 'int', 'bool', 'float', 'array', 'for', 'in'}
                 token_type = 'KEYWORD' if ident in keywords else 'IDENTIFIER'
                 self.tokens.append(Token(token_type, ident, self.line, start_col))
                 continue
                 
-            # Multi-character operators
-            two_char_ops = {
-                '==': 'EQUALS',
-                '!=': 'NOT_EQUALS',
-                '<=': 'LESS_EQUAL',
-                '>=': 'GREATER_EQUAL',
-                '&&': 'AND',
-                '||': 'OR'
-            }
-            
-            if self.pos + 1 < len(self.source):
-                two_chars = self.source[self.pos:self.pos + 2]
-                if two_chars in two_char_ops:
-                    self.tokens.append(Token(two_char_ops[two_chars], two_chars, self.line, self.column))
-                    self.pos += 2
-                    self.column += 2
-                    continue
-                    
             # Single-character operators and punctuation
             operators = {
                 '+': 'PLUS',
@@ -121,6 +125,7 @@ class Lexer:
                 ':': 'COLON',
                 ';': 'SEMICOLON',
                 ',': 'COMMA',
+                '.': 'DOT'
             }
             
             if char in operators:

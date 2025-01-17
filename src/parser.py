@@ -27,6 +27,8 @@ class Parser:
                 return self.parse_if_statement()
             elif token.value == 'while':
                 return self.parse_while_statement()
+            elif token.value == 'for':
+                return self.parse_for_statement()
         elif token.type == 'IDENTIFIER':
             # Handle assignment to existing variable
             if self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1].type == 'ASSIGN':
@@ -42,79 +44,61 @@ class Parser:
         return self.parse_logical_or()
         
     def parse_logical_or(self):
-        left = self.parse_logical_and()
-        
-        while self.pos < len(self.tokens) and self.tokens[self.pos].type == 'OR':
-            operator = self.tokens[self.pos].value
-            self.pos += 1
+        expr = self.parse_logical_and()
+        while self.pos < len(self.tokens) and self.current_token().type == 'OR':
+            operator = self.consume('OR').value
             right = self.parse_logical_and()
-            left = {'type': 'binary_op', 'operator': operator, 'left': left, 'right': right}
-            
-        return left
+            expr = {'type': 'binary_op', 'operator': operator, 'left': expr, 'right': right}
+        return expr
         
     def parse_logical_and(self):
-        left = self.parse_equality()
-        
-        while self.pos < len(self.tokens) and self.tokens[self.pos].type == 'AND':
-            operator = self.tokens[self.pos].value
-            self.pos += 1
+        expr = self.parse_equality()
+        while self.pos < len(self.tokens) and self.current_token().type == 'AND':
+            operator = self.consume('AND').value
             right = self.parse_equality()
-            left = {'type': 'binary_op', 'operator': operator, 'left': left, 'right': right}
-            
-        return left
+            expr = {'type': 'binary_op', 'operator': operator, 'left': expr, 'right': right}
+        return expr
         
     def parse_equality(self):
-        left = self.parse_comparison()
+        expr = self.parse_relational()
+        while self.pos < len(self.tokens) and self.current_token().type in ['EQUALS', 'NOT_EQUALS']:
+            operator = self.consume(self.current_token().type).value
+            right = self.parse_relational()
+            expr = {'type': 'binary_op', 'operator': operator, 'left': expr, 'right': right}
+        return expr
         
-        while self.pos < len(self.tokens) and self.tokens[self.pos].type in ['EQUALS', 'NOT_EQUALS']:
-            operator = self.tokens[self.pos].value
-            self.pos += 1
-            right = self.parse_comparison()
-            left = {'type': 'binary_op', 'operator': operator, 'left': left, 'right': right}
-            
-        return left
-        
-    def parse_comparison(self):
-        left = self.parse_additive()
-        
-        while self.pos < len(self.tokens) and self.tokens[self.pos].type in ['LESS', 'GREATER', 'LESS_EQUAL', 'GREATER_EQUAL']:
-            operator = self.tokens[self.pos].value
-            self.pos += 1
+    def parse_relational(self):
+        expr = self.parse_additive()
+        while self.pos < len(self.tokens) and self.current_token().type in ['LESS', 'GREATER', 'LESS_EQUAL', 'GREATER_EQUAL']:
+            operator = self.consume(self.current_token().type).value
             right = self.parse_additive()
-            left = {'type': 'binary_op', 'operator': operator, 'left': left, 'right': right}
-            
-        return left
+            expr = {'type': 'binary_op', 'operator': operator, 'left': expr, 'right': right}
+        return expr
         
     def parse_additive(self):
-        left = self.parse_multiplicative()
-        
-        while self.pos < len(self.tokens) and self.tokens[self.pos].type in ['PLUS', 'MINUS']:
-            operator = self.tokens[self.pos].value
-            self.pos += 1
+        expr = self.parse_multiplicative()
+        while self.pos < len(self.tokens) and self.current_token().type in ['PLUS', 'MINUS']:
+            operator = self.consume(self.current_token().type).value
             right = self.parse_multiplicative()
-            left = {'type': 'binary_op', 'operator': operator, 'left': left, 'right': right}
-            
-        return left
+            expr = {'type': 'binary_op', 'operator': operator, 'left': expr, 'right': right}
+        return expr
         
     def parse_multiplicative(self):
-        left = self.parse_primary()
-        
-        while self.pos < len(self.tokens) and self.tokens[self.pos].type in ['MULTIPLY', 'DIVIDE', 'MODULO']:
-            operator = self.tokens[self.pos].value
-            self.pos += 1
+        expr = self.parse_primary()
+        while self.pos < len(self.tokens) and self.current_token().type in ['MULTIPLY', 'DIVIDE', 'MODULO']:
+            operator = self.consume(self.current_token().type).value
             right = self.parse_primary()
-            left = {'type': 'binary_op', 'operator': operator, 'left': left, 'right': right}
-            
-        return left
+            expr = {'type': 'binary_op', 'operator': operator, 'left': expr, 'right': right}
+        return expr
         
     def parse_primary(self):
         token = self.current_token()
+        
         if token.type == 'NUMBER':
             self.pos += 1
             return {'type': 'number', 'value': float(token.value)}
         elif token.type == 'STRING':
             self.pos += 1
-            # Remove the quotes from the string value
             value = token.value[1:-1] if token.value.startswith('"') and token.value.endswith('"') else token.value
             return {'type': 'string', 'value': value}
         elif token.type == 'KEYWORD':
@@ -125,15 +109,25 @@ class Parser:
                 return self.parse_conditional_expression()
         elif token.type == 'IDENTIFIER':
             self.pos += 1
-            if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'LPAREN':
-                self.pos -= 1
-                return self.parse_function_call()
+            if self.pos < len(self.tokens):
+                next_token = self.tokens[self.pos]
+                if next_token.type == 'LPAREN':
+                    self.pos -= 1
+                    return self.parse_function_call()
+                elif next_token.type == 'LBRACKET':
+                    self.consume('LBRACKET')
+                    index = self.parse_expression()
+                    self.consume('RBRACKET')
+                    return {'type': 'array_access', 'array': token.value, 'index': index}
             return {'type': 'variable', 'name': token.value}
         elif token.type == 'LPAREN':
             self.pos += 1
             expr = self.parse_expression()
             self.consume('RPAREN')
             return expr
+        elif token.type == 'LBRACKET':
+            return self.parse_array_literal()
+            
         raise SyntaxError(f"Unexpected token {token.type} at line {token.line}, column {token.column}")
 
     def parse_variable_declaration(self):
@@ -142,7 +136,13 @@ class Parser:
         self.consume('COLON')
         type_token = self.consume('KEYWORD')  # Changed from IDENTIFIER to KEYWORD for type names
         self.consume('ASSIGN')
-        value = self.parse_expression()
+        
+        # Handle array literals
+        if self.current_token().type == 'LBRACKET':
+            value = self.parse_array_literal()
+        else:
+            value = self.parse_expression()
+            
         self.consume('SEMICOLON')
         return {'type': 'var_declaration', 'name': name, 'var_type': type_token.value, 'value': value}
 
@@ -240,6 +240,66 @@ class Parser:
         self.consume('RBRACE')
         
         return {'type': 'while', 'condition': condition, 'body': body}
+
+    def parse_for_statement(self):
+        self.consume('KEYWORD')  # consume 'for'
+        iterator = self.consume('IDENTIFIER').value
+        self.consume('KEYWORD')  # consume 'in'
+        
+        # Parse the iterable (either a range or an array)
+        start = self.parse_expression()
+        
+        # If we see a range operator, this is a range-based for loop
+        if self.current_token().type == 'RANGE':
+            self.consume('RANGE')
+            end = self.parse_expression()
+            
+            # Create a range node with properly typed start and end values
+            if isinstance(start, dict) and start.get('type') == 'number':
+                start_val = start
+            elif isinstance(start, dict) and start.get('type') == 'variable':
+                start_val = start  # Keep variable reference as is
+            else:
+                start_val = {'type': 'number', 'value': float(start)}
+                
+            if isinstance(end, dict) and end.get('type') == 'number':
+                end_val = end
+            elif isinstance(end, dict) and end.get('type') == 'variable':
+                end_val = end  # Keep variable reference as is
+            else:
+                end_val = {'type': 'number', 'value': float(end)}
+                
+            iterable = {'type': 'range', 'start': start_val, 'end': end_val}
+        else:
+            # This is an array-based for loop
+            iterable = start
+            
+        self.consume('LBRACE')
+        body = []
+        while self.current_token().type != 'RBRACE':
+            body.append(self.parse_statement())
+        self.consume('RBRACE')
+        
+        return {'type': 'for', 'iterator': iterator, 'iterable': iterable, 'body': body}
+
+    def parse_array_literal(self):
+        elements = []
+        self.consume('LBRACKET')
+        
+        if self.current_token().type != 'RBRACKET':
+            elements.append(self.parse_expression())
+            while self.current_token().type == 'COMMA':
+                self.consume('COMMA')
+                elements.append(self.parse_expression())
+            
+        self.consume('RBRACKET')
+        return {'type': 'array', 'elements': elements}
+
+    def parse_array_access(self, array_name):
+        self.consume('LBRACKET')
+        index = self.parse_expression()
+        self.consume('RBRACKET')
+        return {'type': 'array_access', 'array': array_name, 'index': index}
 
     def parse_conditional_expression(self):
         self.consume('KEYWORD')  # consume 'if'

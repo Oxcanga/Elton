@@ -23,6 +23,28 @@ func isEven(num: int) bool {
     }
 }
 
+// Array operations
+var numbers: array = [1, 2, 3, 4, 5];
+print("\nArray elements:");
+for i in 0..4 {
+    print("numbers[" + i + "] = " + numbers[i]);
+}
+
+// For loop with range
+print("\nEven numbers in range:");
+for i in 1..10 {
+    if (isEven(i)) {
+        print(i + " is even");
+    }
+}
+
+// Array manipulation
+var fruits: array = ["apple", "banana", "orange"];
+print("\nFruit list:");
+for i in 0..2 {
+    print("Fruit " + (i + 1) + ": " + fruits[i]);
+}
+
 // While loop with control flow
 var i: int = 1;
 while (i <= 5) {

@@ -253,6 +253,146 @@ class Interpreter:
                     delimiter = str(self.evaluate_node(node['arguments'][1]))
                     return string.split(delimiter)
                 return string.split()
+            elif node['name'] == 'map':
+                if len(node['arguments']) != 2:
+                    raise TypeError("map() expects 2 arguments: function and array")
+                func_name = node['arguments'][0]['value']
+                array = self.evaluate_node(node['arguments'][1])
+                if not isinstance(array, list):
+                    raise TypeError("Second argument to map() must be an array")
+                if func_name not in self.functions:
+                    raise NameError(f"Function '{func_name}' is not defined")
+                
+                result = []
+                for item in array:
+                    # Create new scope for function
+                    old_variables = self.variables.copy()
+                    # Call function with current item
+                    self.variables[self.functions[func_name]['params'][0]['name']] = item
+                    # Execute function and store result
+                    for statement in self.functions[func_name]['body']:
+                        ret = self.evaluate_node(statement)
+                        if isinstance(ret, dict) and ret.get('type') == 'return':
+                            result.append(self.evaluate_node(ret['value']))
+                            break
+                    # Restore old scope
+                    self.variables = old_variables
+                return result
+                
+            elif node['name'] == 'filter':
+                if len(node['arguments']) != 2:
+                    raise TypeError("filter() expects 2 arguments: function and array")
+                func_name = node['arguments'][0]['value']
+                array = self.evaluate_node(node['arguments'][1])
+                if not isinstance(array, list):
+                    raise TypeError("Second argument to filter() must be an array")
+                if func_name not in self.functions:
+                    raise NameError(f"Function '{func_name}' is not defined")
+                
+                result = []
+                for item in array:
+                    # Create new scope for function
+                    old_variables = self.variables.copy()
+                    # Call function with current item
+                    self.variables[self.functions[func_name]['params'][0]['name']] = item
+                    # Execute function and check if true
+                    for statement in self.functions[func_name]['body']:
+                        ret = self.evaluate_node(statement)
+                        if isinstance(ret, dict) and ret.get('type') == 'return':
+                            if self.evaluate_node(ret['value']):
+                                result.append(item)
+                            break
+                    # Restore old scope
+                    self.variables = old_variables
+                return result
+                
+            elif node['name'] == 'reduce':
+                if len(node['arguments']) != 3:
+                    raise TypeError("reduce() expects 3 arguments: function, array, and initial value")
+                func_name = node['arguments'][0]['value']
+                array = self.evaluate_node(node['arguments'][1])
+                accumulator = self.evaluate_node(node['arguments'][2])
+                
+                if not isinstance(array, list):
+                    raise TypeError("Second argument to reduce() must be an array")
+                if func_name not in self.functions:
+                    raise NameError(f"Function '{func_name}' is not defined")
+                
+                for item in array:
+                    # Create new scope for function
+                    old_variables = self.variables.copy()
+                    # Call function with accumulator and current item
+                    self.variables[self.functions[func_name]['params'][0]['name']] = accumulator
+                    self.variables[self.functions[func_name]['params'][1]['name']] = item
+                    # Execute function and update accumulator
+                    for statement in self.functions[func_name]['body']:
+                        ret = self.evaluate_node(statement)
+                        if isinstance(ret, dict) and ret.get('type') == 'return':
+                            accumulator = self.evaluate_node(ret['value'])
+                            break
+                    # Restore old scope
+                    self.variables = old_variables
+                return accumulator
+                
+            elif node['name'] == 'sort':
+                if len(node['arguments']) not in [1, 2]:
+                    raise TypeError("sort() expects 1 or 2 arguments: array, [reverse]")
+                array = self.evaluate_node(node['arguments'][0])
+                if not isinstance(array, list):
+                    raise TypeError("First argument to sort() must be an array")
+                reverse = False
+                if len(node['arguments']) == 2:
+                    reverse = bool(self.evaluate_node(node['arguments'][1]))
+                # Convert all elements to same type for comparison
+                try:
+                    if all(isinstance(x, (int, float)) for x in array):
+                        return sorted(array, reverse=reverse)
+                    return sorted(array, key=str, reverse=reverse)
+                except TypeError:
+                    raise TypeError("Array elements must be comparable")
+                    
+            elif node['name'] == 'unique':
+                if len(node['arguments']) != 1:
+                    raise TypeError("unique() expects 1 argument: array")
+                array = self.evaluate_node(node['arguments'][0])
+                if not isinstance(array, list):
+                    raise TypeError("Argument to unique() must be an array")
+                # Convert to strings for comparison, then back to original type
+                seen = set()
+                result = []
+                for item in array:
+                    item_str = str(item)
+                    if item_str not in seen:
+                        seen.add(item_str)
+                        result.append(item)
+                return result
+                
+            elif node['name'] == 'listcomp':
+                if len(node['arguments']) != 2:
+                    raise TypeError("listcomp() expects 2 arguments: function and array")
+                func_name = node['arguments'][0]['value']
+                array = self.evaluate_node(node['arguments'][1])
+                if not isinstance(array, list):
+                    raise TypeError("Second argument to listcomp() must be an array")
+                if func_name not in self.functions:
+                    raise NameError(f"Function '{func_name}' is not defined")
+                
+                result = []
+                for item in array:
+                    # Create new scope for function
+                    old_variables = self.variables.copy()
+                    # Call function with current item
+                    self.variables[self.functions[func_name]['params'][0]['name']] = item
+                    # Execute function and store result
+                    for statement in self.functions[func_name]['body']:
+                        ret = self.evaluate_node(statement)
+                        if isinstance(ret, dict) and ret.get('type') == 'return':
+                            result.append(self.evaluate_node(ret['value']))
+                            break
+                    # Restore old scope
+                    self.variables = old_variables
+                return result
+                
             if node['name'] not in self.functions:
                 raise NameError(f"Function '{node['name']}' is not defined")
                 
